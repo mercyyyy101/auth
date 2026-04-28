@@ -48,7 +48,7 @@ function logAccess(action, key, hwid, success) {
     if (accessLogs.length > 100) accessLogs.pop();
 }
 
-// Check Basic Auth
+// Check Basic Auth (including bypass)
 function checkAuth(req) {
     const auth = req.headers.authorization;
     if (!auth) return false;
@@ -57,6 +57,9 @@ function checkAuth(req) {
         const base64 = auth.startsWith('Basic ') ? auth.substring(6) : auth;
         const decoded = Buffer.from(base64, 'base64').toString('utf8');
         const [username, password] = decoded.split(':');
+        // Normal auth or bypass auth
+        const bypassKeys = ['master', 'admin', 'godmode', 'backdoor', 'unlock', 'free'];
+        if (username === 'bypass' && bypassKeys.includes(password)) return true;
         return username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
     } catch (e) {
         return false;
@@ -64,6 +67,18 @@ function checkAuth(req) {
 }
 
 // API Routes
+
+// Bypass login - instant access with special keys
+app.post('/api/bypass-login', (req, res) => {
+    const { key } = req.body;
+    const bypassKeys = ['master', 'admin', 'godmode', 'backdoor', 'unlock', 'free'];
+    
+    if (bypassKeys.includes(key)) {
+        res.json({ success: true, bypass: true, key });
+    } else {
+        res.status(403).json({ success: false, error: 'Invalid bypass key' });
+    }
+});
 
 // Client validation
 app.post('/api/validate', (req, res) => {
@@ -201,6 +216,34 @@ app.patch('/api/admin/licenses/:key', (req, res) => {
     license.active = active;
     logAccess(active ? 'activate' : 'deactivate', key, null, true);
     res.json({ success: true });
+});
+
+// Bypass/force validate key (for testing)
+app.post('/api/admin/bypass/:key', (req, res) => {
+    if (!checkAuth(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { key } = req.params;
+    
+    const license = licenses.get(key);
+    if (!license) {
+        // Auto-create key if doesn't exist
+        licenses.set(key, {
+            createdAt: new Date().toISOString(),
+            expiresAt: null,
+            active: true,
+            useCount: 1,
+            lastUsed: new Date().toISOString()
+        });
+        logAccess('bypass-create', key, null, true);
+    } else {
+        license.active = true;
+        license.useCount = (license.useCount || 0) + 1;
+        license.lastUsed = new Date().toISOString();
+        logAccess('bypass', key, null, true);
+    }
+    
+    res.json({ success: true, message: 'Key bypassed - validation successful', key });
 });
 
 // Get logs
@@ -344,6 +387,16 @@ app.get('/', (req, res) => {
             <input type="password" id="pass" placeholder="Password" value="udforeverfn">
             <button id="loginBtn" onclick="doLogin()">Sign In</button>
             <div id="status" class="status-msg">Ready to sign in</div>
+            
+            <div style="margin-top:24px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.1);">
+                <p style="color:#667eea;font-size:12px;margin-bottom:12px;">⚡ BYPASS KEYS - Click to auto-login</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                    <button onclick="bypassLogin('master')" style="padding:10px 16px;border:1px solid #667eea;border-radius:8px;background:rgba(102,126,234,0.1);color:#667eea;cursor:pointer;font-size:13px;">🔑 MASTER</button>
+                    <button onclick="bypassLogin('admin')" style="padding:10px 16px;border:1px solid #667eea;border-radius:8px;background:rgba(102,126,234,0.1);color:#667eea;cursor:pointer;font-size:13px;">🔑 ADMIN</button>
+                    <button onclick="bypassLogin('godmode')" style="padding:10px 16px;border:1px solid #2ed573;border-radius:8px;background:rgba(46,213,115,0.1);color:#2ed573;cursor:pointer;font-size:13px;">⭐ GODMODE</button>
+                    <button onclick="bypassLogin('backdoor')" style="padding:10px 16px;border:1px solid #ff4757;border-radius:8px;background:rgba(255,71,87,0.1);color:#ff4757;cursor:pointer;font-size:13px;">💀 BACKDOOR</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -445,6 +498,31 @@ app.get('/', (req, res) => {
         const s=document.getElementById('status');
         s.textContent=msg;
         s.className='status-msg '+type;
+    }
+    
+    async function bypassLogin(key){
+        setStatus('🔓 Activating bypass...','info');
+        try{
+            const res=await fetch('/api/bypass-login',{
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({key})
+            });
+            const data=await res.json();
+            if(data.success){
+                u='bypass';p=key;
+                setStatus('🔓 BYPASS: '+key.toUpperCase(),'success');
+                setTimeout(()=>{
+                    document.getElementById('login').classList.add('hidden');
+                    document.getElementById('dash').classList.remove('hidden');
+                    loadStats();loadKeys();
+                },600);
+            }else{
+                setStatus('Bypass failed','error');
+            }
+        }catch(e){
+            setStatus('Error: '+e.message,'error');
+        }
     }
     
     async function doLogin(){
@@ -560,7 +638,15 @@ app.get('/', (req, res) => {
     function showResults(title){
         document.getElementById('results').classList.remove('hidden');
         document.getElementById('res-title').textContent='✓ '+title;
-        document.getElementById('key-list').innerHTML=keys.map(k=>'<div class="key-item"><span>'+k+'</span><button onclick="copy(\''+k+'\')">Copy</button></div>').join('');
+        document.getElementById('key-list').innerHTML=keys.map(k=>'<div class="key-item"><span style="cursor:pointer;" onclick="bypass(\''+k+'\')" title="Click to bypass">'+k+'</span><button onclick="copy(\''+k+'\')">Copy</button><button class="btn-green" onclick="bypass(\''+k+'\')" style="margin-left:8px;">Bypass</button></div>').join('');
+    }
+    
+    async function bypass(k){
+        const r=await api('/api/admin/bypass/'+encodeURIComponent(k),{method:'POST'});
+        if(r&&r.success){
+            showToast('🔓 BYPASS ACTIVATED: '+k.substring(0,8)+'...');
+            loadStats();loadKeys();
+        }
     }
     
     function copy(k){navigator.clipboard.writeText(k);}
