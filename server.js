@@ -56,7 +56,10 @@ function checkAuth(req) {
     const auth = req.headers.authorization;
     if (!auth) return false;
     
-    const decoded = Buffer.from(auth, 'base64').toString('utf8');
+    // Remove "Basic " prefix if present
+    const base64 = auth.startsWith('Basic ') ? auth.slice(6) : auth;
+    
+    const decoded = Buffer.from(base64, 'base64').toString('utf8');
     const [username, password] = decoded.split(':');
     
     return username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
