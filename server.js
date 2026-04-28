@@ -570,10 +570,13 @@ app.get('/', (req, res) => {
         const username=document.getElementById('username-input').value;
         const password=document.getElementById('password-input').value;
         if(!username||!password){document.getElementById('login-error').textContent='Please fill all fields';document.getElementById('login-error').style.display='block';return;}
-        const res=await fetch(window.location.origin+'/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
-        const data=await res.json();
-        if(data.success){authUsername=username;authPassword=password;document.getElementById('login-screen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');document.getElementById('login-error').style.display='none';loadStats();loadLicenses();showToast('Welcome back!');}
-        else{document.getElementById('login-error').textContent='Invalid credentials';document.getElementById('login-error').style.display='block';}
+        try{
+            const res=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+            if(!res.ok){document.getElementById('login-error').textContent='Server error: '+res.status;document.getElementById('login-error').style.display='block';return;}
+            const data=await res.json();
+            if(data.success){authUsername=username;authPassword=password;document.getElementById('login-screen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');document.getElementById('login-error').style.display='none';loadStats();loadLicenses();showToast('Welcome back!');}
+            else{document.getElementById('login-error').textContent='Invalid credentials';document.getElementById('login-error').style.display='block';}
+        }catch(e){document.getElementById('login-error').textContent='Error: '+e.message;document.getElementById('login-error').style.display='block';}
     }
     function logout(){authUsername='';authPassword='';document.getElementById('dashboard').classList.add('hidden');document.getElementById('login-screen').classList.remove('hidden');document.getElementById('username-input').value='';document.getElementById('password-input').value='';document.getElementById('generated-keys').classList.add('hidden');generatedKeysList=[];}
     function showTab(tab){
