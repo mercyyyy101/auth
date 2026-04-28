@@ -415,7 +415,7 @@ app.get('/', (req, res) => {
                 <input type="password" id="password-input" placeholder="Password">
             </div>
             <button onclick="login()">Sign In</button>
-            <div id="login-error" class="error" style="display:none;"></div>
+            <div id="login-error" class="error">Ready to login</div>
         </div>
     </div>
 
@@ -569,14 +569,17 @@ app.get('/', (req, res) => {
     async function login(){
         const username=document.getElementById('username-input').value;
         const password=document.getElementById('password-input').value;
-        if(!username||!password){document.getElementById('login-error').textContent='Please fill all fields';document.getElementById('login-error').style.display='block';return;}
+        const errDiv=document.getElementById('login-error');
+        errDiv.style.display='block';
+        if(!username||!password){errDiv.textContent='Please fill all fields';return;}
+        errDiv.textContent='Connecting...';
         try{
             const res=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
-            if(!res.ok){document.getElementById('login-error').textContent='Server error: '+res.status;document.getElementById('login-error').style.display='block';return;}
+            errDiv.textContent='Status: '+res.status;
             const data=await res.json();
-            if(data.success){authUsername=username;authPassword=password;document.getElementById('login-screen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');document.getElementById('login-error').style.display='none';loadStats();loadLicenses();showToast('Welcome back!');}
-            else{document.getElementById('login-error').textContent='Invalid credentials';document.getElementById('login-error').style.display='block';}
-        }catch(e){document.getElementById('login-error').textContent='Error: '+e.message;document.getElementById('login-error').style.display='block';}
+            if(data&&data.success){authUsername=username;authPassword=password;document.getElementById('login-screen').classList.add('hidden');document.getElementById('dashboard').classList.remove('hidden');errDiv.style.display='none';loadStats();loadLicenses();}
+            else{errDiv.textContent=data&&data.error?data.error:'Login failed';}
+        }catch(e){errDiv.textContent='Error: '+e.message;}
     }
     function logout(){authUsername='';authPassword='';document.getElementById('dashboard').classList.add('hidden');document.getElementById('login-screen').classList.remove('hidden');document.getElementById('username-input').value='';document.getElementById('password-input').value='';document.getElementById('generated-keys').classList.add('hidden');generatedKeysList=[];}
     function showTab(tab){
