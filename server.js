@@ -144,4 +144,15 @@ app.get('/api/admin/stats', (req, res) => {
 
 app.get('/health', (req, res) => res.json({status: 'ok'}));
 
+// Serve index.html for root path
+const fs = require('fs');
+app.get('/', (req, res) => {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('index.html not found');
+    }
+});
+
 app.listen(PORT, () => console.log('Server running on port', PORT));
